@@ -1,0 +1,6 @@
+POLL_LOOP=0
+SET_WHITE=8
+INIT_DRAW=10
+DRAW_STEP=14
+pixel_val=16
+row_ptr=17

@@ -1,0 +1,71 @@
+// CPU.hdl - Hack Central Processing Unit
+CHIP CPU {
+    IN  inM[16],         // M value input (contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to restart the current program
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // Address of next instruction
+
+    PARTS:
+    // Decode instruction type (bit 15: 0 = A-type, 1 = C-type)
+    Not(in=instruction[15], out=isAddrInstr);
+    And(a=instruction[15], b=true, out=isCompInstr);
+
+    // Select source for A-Register: instruction literal vs ALU result
+    Mux16(a=aluResult, b=instruction, sel=isAddrInstr, out=regAInput);
+
+    // Enable A-Register write if A-instruction OR (C-instruction AND dest-A bit)
+    And(a=isCompInstr, b=instruction[5], out=destA);
+    Or(a=isAddrInstr, b=destA, out=enableRegA);
+    ARegister(in=regAInput, load=enableRegA, out=regAOut, out[0..14]=addressM);
+
+    // Enable D-Register write if C-instruction AND dest-D bit
+    And(a=isCompInstr, b=instruction[4], out=enableRegD);
+    DRegister(in=aluResult, load=enableRegD, out=regDOut);
+
+    // Select ALU Y-operand: Register A vs Memory[A] (controlled by bit 12)
+    Mux16(a=regAOut, b=inM, sel=instruction[12], out=aluOperandY);
+
+    // Execute ALU computation
+    ALU(
+        x=regDOut,
+        y=aluOperandY,
+        zx=instruction[11],
+        nx=instruction[10],
+        zy=instruction[9],
+        ny=instruction[8],
+        f=instruction[7],
+        no=instruction[6],
+        out=aluResult,
+        out=outM,
+        zr=isZero,
+        ng=isNeg
+    );
+
+    // Memory write control: C-instruction AND dest-M bit
+    And(a=isCompInstr, b=instruction[3], out=writeM);
+
+    // Evaluate jump flags
+    Or(a=isZero, b=isNeg, out=isZeroOrNeg);
+    Not(in=isZeroOrNeg, out=isPos);
+
+    And(a=instruction[2], b=isNeg,  out=condLT);
+    And(a=instruction[1], b=isZero, out=condEQ);
+    And(a=instruction[0], b=isPos,  out=condGT);
+
+    // Combine jump conditions via Or8Way
+    Or8Way(
+        in[0]=condLT,
+        in[1]=condEQ,
+        in[2]=condGT,
+        in[3..7]=false,
+        out=jumpTrigger
+    );
+    And(a=isCompInstr, b=jumpTrigger, out=shouldJump);
+
+    // Program Counter update
+    PC(in=regAOut, load=shouldJump, inc=true, reset=reset, out[0..14]=pc);
+}

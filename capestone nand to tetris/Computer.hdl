@@ -1,0 +1,25 @@
+// Computer.hdl - Top-level Hack architecture
+CHIP Computer {
+    IN reset;
+
+    PARTS:
+    CPU(
+        inM=ramDataOut,
+        instruction=romInstr,
+        reset=reset,
+        outM=cpuDataOut,
+        writeM=ramWriteEnable,
+        addressM=ramAddr,
+        pc=progCounter
+    );
+    Memory(
+        in=cpuDataOut,
+        load=ramWriteEnable,
+        address=ramAddr,
+        out=ramDataOut
+    );
+    ROM32K(
+        address=progCounter,
+        out=romInstr
+    );
+}
